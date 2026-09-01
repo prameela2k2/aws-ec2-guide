@@ -84,6 +84,8 @@ h1{
   color:var(--ink-2);background:var(--ground);
 }
 .chip strong{color:var(--ink);font-weight:600}
+.chip--dl{text-decoration:none;color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
+.chip--dl:hover{background:var(--accent);color:var(--surface)}
 
 /* ---------- layout ---------- */
 .shell{display:grid;grid-template-columns:1fr;gap:0}
@@ -251,6 +253,27 @@ html{-webkit-text-size-adjust:100%}
   p code,li code,td code{overflow-wrap:anywhere;word-break:break-word}
 }
 </style>
+<style>
+/* ---------- print / PDF ---------- */
+@media print{
+  /* keep the dark terminals and coloured callouts - browsers drop them otherwise */
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  @page{margin:14mm 12mm}
+  html,body{background:#fff}
+  .rail{display:none!important}
+  .wrap{max-width:none;padding:0}
+  /* overflow-x:auto CLIPS on paper - wrap long commands instead of losing them */
+  pre,pre code{white-space:pre-wrap!important;overflow:visible!important;word-break:break-word}
+  .term,.out,.tablewrap{overflow:visible!important}
+  /* don't strand headings or split a callout across pages */
+  h2,h3,figcaption{break-after:avoid}
+  .note,.gotcha,.tablewrap,figcaption{break-inside:avoid}
+  section{break-before:page}
+  .masthead+.shell section:first-of-type{break-before:auto}
+  a{text-decoration:none;color:inherit}
+  .chip--dl{display:none}
+}
+</style>
 </head>
 <body>
 
@@ -264,6 +287,7 @@ html{-webkit-text-size-adjust:100%}
       <span class="chip">Windows 10 · Git Bash + PowerShell</span>
       <span class="chip">Ubuntu 24.04 · t3.micro</span>
       <span class="chip">Region <strong>us-east-1</strong></span>
+      <a class="chip chip--dl" href="aws-ec2-guide.pdf">Download PDF</a>
     </div>
   </div>
 </header>
