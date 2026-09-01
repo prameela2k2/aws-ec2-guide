@@ -299,6 +299,7 @@ html{-webkit-text-size-adjust:100%}
     <h2>Contents</h2>
     <ol>
       <li><a href="#s0"><span class="n">00</span><span>What EC2 is</span></a></li>
+      <li><a href="#prereq"><span class="n">§</span><span>Before you start</span></a></li>
       <li><a href="#s1"><span class="n">01</span><span>Generate a key pair</span></a></li>
       <li><a href="#s2"><span class="n">02</span><span>Launch an instance</span></a></li>
       <li><a href="#s3"><span class="n">03</span><span>Rescue a keyless box</span></a></li>
@@ -361,6 +362,51 @@ aws ec2 describe-instances `
     <div class="note warn">
       <span class="label">Reality check</span>
       <p>A t3.micro has 1&nbsp;GB RAM and 2 vCPU — <em>less capable than free Google Colab</em>. It's an excellent web server and Linux practice box; it is not an ML machine. For that you want a GPU instance (<code>g4dn.xlarge</code>, ~$0.53/hr), which requires a quota-increase request before you can launch one.</p>
+    </div>
+  </section>
+
+  <section id="prereq">
+    <h2><span class="n">§</span><span>Before you start — account, CLI, credentials</span></h2>
+    <div class="rule"></div>
+    <p>Everything below assumes <code>aws</code> already works on your laptop. Run this check first:</p>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>PowerShell<span class="where">your laptop</span></figcaption>
+<pre><code>aws sts get-caller-identity</code></pre>
+    </figure>
+    <p>An account number and a user ARN means you're ready — skip to section 1. <code>command not found</code> or <code>Unable to locate credentials</code> means you need the route that matches your class.</p>
+
+    <h3>Route A — your own AWS account</h3>
+    <ol class="body">
+      <li><strong>Sign up</strong> at <a href="https://aws.amazon.com">aws.amazon.com</a>. You need a card for identity verification, and AWS may place a temporary ~$1 hold on it. Staying inside the free tier and following sections 10 and 12 keeps the actual bill at $0.</li>
+      <li><strong>Stop using root immediately.</strong> The account you just created is the root user and cannot be restricted. Go to <strong>IAM → Users → Create user</strong>, make yourself a normal user, and attach the <code>AmazonEC2FullAccess</code> policy — that covers sections 1 through 9. Turn on MFA while you're there.</li>
+      <li><strong>Create an access key.</strong> IAM → your user → <strong>Security credentials → Create access key → Command line interface (CLI)</strong>. Copy both values now — the secret is shown exactly once and cannot be retrieved later.</li>
+      <li>Continue with <strong>Both routes</strong> below.</li>
+    </ol>
+
+    <h3>Route B — an IAM user in your instructor's account</h3>
+    <p>Your instructor creates one IAM user per student and sends you an access key id and secret. You skip signup entirely — and your instructor sees and pays for every resource you launch, so stop your instance when you're done (section 12).</p>
+    <div class="note">
+      <span class="label">Instructor side</span>
+      <p>IAM → Users → Create user, one per student → attach <code>AmazonEC2FullAccess</code> → Security credentials → Create access key. Set a budget alarm (section 10) before handing any of them out.</p>
+    </div>
+
+    <h3>Both routes — install the CLI and log in</h3>
+    <p>Install <strong>AWS CLI v2</strong> from the Windows MSI at <a href="https://awscli.amazonaws.com/AWSCLIV2.msi">awscli.amazonaws.com/AWSCLIV2.msi</a>, then <strong>open a new terminal</strong> so it lands on your PATH:</p>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>PowerShell<span class="where">your laptop</span></figcaption>
+<pre><code>aws --version          <span class="c"># aws-cli/2.x.x ...</span>
+
+aws configure
+<span class="c"># AWS Access Key ID     -&gt; paste</span>
+<span class="c"># AWS Secret Access Key -&gt; paste</span>
+<span class="c"># Default region name   -&gt; us-east-1</span>
+<span class="c"># Default output format -&gt; json</span>
+
+aws sts get-caller-identity   <span class="c"># confirm it worked</span></code></pre>
+    </figure>
+    <div class="note danger">
+      <span class="label">Never commit or share an access key</span>
+      <p>It is a password to your whole account. Keep it out of git, out of screenshots, out of shared drives. If one leaks, delete it in IAM immediately — and delete your keys at the end of term either way.</p>
     </div>
   </section>
 

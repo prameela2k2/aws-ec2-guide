@@ -54,6 +54,75 @@ requires a quota-increase request before you can launch one.
 
 ---
 
+## Before you start — account, CLI, credentials
+
+Everything below assumes `aws` already works on your laptop. Run this check first:
+
+```powershell
+aws sts get-caller-identity
+```
+
+If it prints an account number and a user ARN, skip to §1. If it says
+`command not found` or `Unable to locate credentials`, do the route that matches
+your class.
+
+### Route A — your own AWS account
+
+1. **Sign up** at [aws.amazon.com](https://aws.amazon.com). You need a card for
+   identity verification, and AWS may place a temporary ~$1 hold on it. Staying
+   inside the free tier and following §10 and §12 keeps the actual bill at $0.
+2. **Stop using root immediately.** The account you just made is the root user;
+   it cannot be restricted. In the console go to **IAM → Users → Create user**,
+   give yourself a normal user, and attach the **`AmazonEC2FullAccess`** policy —
+   that covers §1 through §9. Turn on MFA while you're there.
+3. **Create an access key.** IAM → your user → **Security credentials → Create
+   access key → Command line interface (CLI)**. Copy both values now: the secret
+   is displayed exactly once and cannot be retrieved later.
+4. Continue with **Both routes** below.
+
+### Route B — an IAM user in your instructor's account
+
+Your instructor creates one IAM user per student and sends you an access key id
+and secret. You skip signup entirely, and the instructor sees and pays for every
+resource you launch — so stop your instance when you're done (§12).
+
+*Instructor side:* IAM → Users → Create user (one per student) →
+attach `AmazonEC2FullAccess` → Security credentials → Create access key.
+Set a budget alarm (§10) before handing any of them out.
+
+### Both routes — install the CLI and log in
+
+Install **AWS CLI v2** from the Windows MSI at
+<https://awscli.amazonaws.com/AWSCLIV2.msi>, then **open a new terminal** so it
+lands on your PATH:
+
+```powershell
+aws --version          # aws-cli/2.x.x ...
+```
+
+```powershell
+aws configure
+# AWS Access Key ID     -> paste
+# AWS Secret Access Key -> paste
+# Default region name   -> us-east-1
+# Default output format -> json
+```
+
+Confirm it worked:
+
+```powershell
+aws sts get-caller-identity
+```
+
+An account id and your username means you're ready for §1.
+
+> **Never commit or share an access key.** It is a password to your whole
+> account. Keep it out of git, out of screenshots, and out of shared drives. If
+> one leaks, delete it in IAM immediately — and delete your keys at the end of
+> term either way.
+
+---
+
 ## 1. Generate an SSH key pair
 
 **Git Bash:**
