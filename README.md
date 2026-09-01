@@ -8,6 +8,28 @@ PowerShell.
 > understand Git Bash paths like `/c/Users/...`. It installs to
 > `C:\Program Files\Amazon\AWSCLIV2\aws.exe`.
 
+## Contents
+
+- [Fill these in first](#fill-these-in-first)
+- [0. What EC2 is, and when it's worth it](#0-what-ec2-is-and-when-its-worth-it)
+- [Before you start — account, CLI, credentials](#before-you-start--account-cli-credentials)
+- [1. Generate an SSH key pair](#1-generate-an-ssh-key-pair)
+- [2. Launch an instance](#2-launch-an-instance)
+- [3. Rescue an instance that has no key pair](#3-rescue-an-instance-that-has-no-key-pair)
+- [4. SSH shortcut](#4-ssh-shortcut)
+- [5. Lock down the firewall](#5-lock-down-the-firewall)
+- [6. VS Code Remote-SSH](#6-vs-code-remote-ssh)
+- [7. Prepare the server](#7-prepare-the-server)
+- [8. Jupyter notebooks in VS Code — the real Colab replacement](#8-jupyter-notebooks-in-vs-code--the-real-colab-replacement)
+- [9. Serve something to the public internet](#9-serve-something-to-the-public-internet)
+- [10. Cost control and budget alarms](#10-cost-control-and-budget-alarms)
+- [11. stop vs terminate, and auditing with CloudTrail](#11-stop-vs-terminate-and-auditing-with-cloudtrail)
+- [12. The stop routine — how to actually stop paying](#12-the-stop-routine--how-to-actually-stop-paying)
+- [Command cheat sheet](#command-cheat-sheet)
+- [Hard-won lessons](#hard-won-lessons)
+
+---
+
 ## Fill these in first
 
 Run this once per PowerShell session — the commands below reference these variables:
