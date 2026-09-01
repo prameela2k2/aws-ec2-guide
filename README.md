@@ -756,10 +756,144 @@ itself — it shuts down at 22:00 every night whether or not you remembered:
 echo "0 22 * * * root /sbin/shutdown -h now" | sudo tee /etc/cron.d/nightly-stop
 ```
 
-For a class where students each run their own box, schedule it AWS-side instead so it
-works even on an instance nobody can log into. EventBridge Scheduler can call
-`ec2:StopInstances` on a cron, though it needs an IAM role with that permission —
-worth the twenty minutes once, since it protects every instance in the account.
+A cron on the box only helps if the box is healthy and someone set it up. For a class
+where students each run their own instance, schedule the stop **AWS-side** instead: it
+fires whether or not anyone can log in, and you configure it once for the whole account.
+
+### Scheduled auto-stop with EventBridge Scheduler
+
+Three pieces: a role EventBridge can assume, a policy saying what it may stop, and the
+schedule itself. Set `$ACCT` first (§"Fill these in first").
+
+**1. Let the scheduler assume a role.** `trust.json` — the `aws:SourceAccount`
+condition stops another AWS account from tricking the service into using your role:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": { "Service": "scheduler.amazonaws.com" },
+    "Action": "sts:AssumeRole",
+    "Condition": { "StringEquals": { "aws:SourceAccount": "123456789012" } }
+  }]
+}
+```
+
+**2. Say what it may stop.** `permissions.json` — scoped by tag, so the role can only
+touch instances you have explicitly opted in. Without this condition the role could
+stop anything in the account, including a production box:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": "ec2:StopInstances",
+    "Resource": "arn:aws:ec2:*:123456789012:instance/*",
+    "Condition": { "StringEquals": { "ec2:ResourceTag/AutoStop": "true" } }
+  }]
+}
+```
+
+Replace `123456789012` with your account id in both files, then create the role:
+
+```powershell
+aws iam create-role --role-name ec2-nightly-stop `
+  --assume-role-policy-document file://trust.json
+
+aws iam put-role-policy --role-name ec2-nightly-stop `
+  --policy-name stop-tagged-instances `
+  --policy-document file://permissions.json
+```
+
+**3. Opt an instance in** by tagging it. Untagged instances are ignored — this is the
+switch students flip themselves:
+
+```powershell
+aws ec2 create-tags --resources $IID --tags Key=AutoStop,Value=true
+```
+
+**4. Create the schedule.** `target.json`:
+
+```json
+{
+  "Arn": "arn:aws:scheduler:::aws-sdk:ec2:stopInstances",
+  "RoleArn": "arn:aws:iam::123456789012:role/ec2-nightly-stop",
+  "Input": "{\"InstanceIds\":[\"i-0123456789abcdef0\"]}"
+}
+```
+
+```powershell
+aws scheduler create-schedule --name nightly-stop `
+  --schedule-expression "cron(0 22 * * ? *)" `
+  --schedule-expression-timezone "Asia/Kolkata" `
+  --flexible-time-window '{\"Mode\":\"OFF\"}' `
+  --target file://target.json
+```
+
+### The four things that go wrong
+
+**`Input` is a JSON *string*, not JSON.** Look closely at `target.json` above — the
+inner braces are escaped and the whole thing is quoted. Writing it as a nested object
+fails with a validation error that does not mention quoting.
+
+**EventBridge cron has six fields, not five** — `minute hour day-of-month month
+day-of-week year` — and you may not use `*` for both day-of-month and day-of-week. One
+must be `?`. That's why it's `cron(0 22 * * ? *)` and not `cron(0 22 * * *)`. A
+five-field expression is rejected outright.
+
+**`--schedule-expression-timezone` matters.** Without it the schedule runs in UTC, so
+"22:00" fires at 03:30 IST — mid-morning for nobody, and the box runs all evening.
+Names come from the IANA database: `Asia/Kolkata`, `America/New_York`.
+
+**You need `iam:PassRole`.** Creating a schedule that hands a role to a service
+requires permission to pass that role. Without it `create-schedule` fails with an
+`AccessDeniedException` naming `iam:PassRole`, not anything about schedules.
+
+### Confirm it works without waiting until 22:00
+
+Don't find out overnight. Point a one-off schedule a few minutes into the future —
+`at()` runs exactly once:
+
+```powershell
+aws scheduler create-schedule --name stop-test `
+  --schedule-expression "at(2026-09-01T18:05:00)" `
+  --schedule-expression-timezone "Asia/Kolkata" `
+  --flexible-time-window '{\"Mode\":\"OFF\"}' `
+  --target file://target.json
+
+# a few minutes later - should read "stopped"
+aws ec2 describe-instances --instance-ids $IID `
+  --query 'Reservations[].Instances[].State.Name' --output text
+
+aws scheduler delete-schedule --name stop-test
+```
+
+If nothing happened, check in this order: the instance carries the `AutoStop=true` tag,
+the account id in both JSON files is really yours, and the instance id inside `Input`
+is right. A schedule with a bad target fails silently from the CLI's point of view —
+`aws scheduler get-schedule --name nightly-stop` shows the config it actually stored.
+
+Managing them afterwards:
+
+```powershell
+aws scheduler list-schedules --output table
+aws scheduler delete-schedule --name nightly-stop
+```
+
+**Cost:** a nightly schedule is about 30 invocations a month. EventBridge Scheduler
+bills per million invocations, so this rounds to $0 — check the pricing page if you
+plan to schedule at minute granularity across a large fleet.
+
+**This only ever stops, never terminates.** The policy grants `ec2:StopInstances` and
+nothing else, so the worst a misconfigured schedule can do is switch off a box early.
+Student work on the disk survives (§11).
+
+**Scaling to a whole class:** `Input` takes a fixed list of instance ids, so each new
+student box needs adding to it. The tag condition keeps that safe but not automatic —
+stopping *everything* carrying a tag needs a small Lambda that looks up instances by
+tag and calls `StopInstances`, which is a bigger build than this one-time setup.
 
 ### Sweep for forgotten instances
 
