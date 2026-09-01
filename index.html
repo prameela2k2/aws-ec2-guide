@@ -1,0 +1,1006 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A practical, failure-first runbook for renting a Linux box on AWS EC2 and using it as a real remote dev machine.">
+<title>EC2 Dev Box Runbook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+
+<style>
+:root{
+  --ground:#F1F5F6; --surface:#FFFFFF; --surface-2:#E6EDEF;
+  --ink:#0F1719; --ink-2:#374A50; --muted:#63787F;
+  --line:#D2DEE1; --line-strong:#B6C7CC;
+  --accent:#0F6E70; --accent-soft:#DBEBEB; --accent-ink:#0B5254;
+  --warn:#8F5500; --warn-soft:#FBEFDC; --warn-line:#E0BC85;
+  --danger:#9E2018; --danger-soft:#FAE5E3; --danger-line:#E0A9A4;
+  --ok:#146339; --ok-soft:#DCEDE3; --ok-line:#9BC9AF;
+  --code-bg:#0C1619; --code-fg:#D3E3E7; --code-line:#1E3238;
+  --code-dim:#7B959C; --code-hi:#67C9C2; --code-warn:#E8B473;
+  --shadow:0 1px 2px rgba(15,23,25,.05),0 8px 24px -12px rgba(15,23,25,.18);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0A1113; --surface:#111B1E; --surface-2:#17242A;
+    --ink:#E3EDEF; --ink-2:#AEC3C9; --muted:#7C939A;
+    --line:#22343A; --line-strong:#2F464E;
+    --accent:#54C2B9; --accent-soft:#0E2E2E; --accent-ink:#7FD6CE;
+    --warn:#E3A85F; --warn-soft:#2E2211; --warn-line:#5B4322;
+    --danger:#F0857B; --danger-soft:#33160F; --danger-line:#663029;
+    --ok:#63C990; --ok-soft:#0F2C1D; --ok-line:#255B3C;
+    --code-bg:#060E10; --code-fg:#CADCE1; --code-line:#1B2C31;
+    --code-dim:#6D868D; --code-hi:#67C9C2; --code-warn:#E8B473;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -14px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0A1113; --surface:#111B1E; --surface-2:#17242A;
+  --ink:#E3EDEF; --ink-2:#AEC3C9; --muted:#7C939A;
+  --line:#22343A; --line-strong:#2F464E;
+  --accent:#54C2B9; --accent-soft:#0E2E2E; --accent-ink:#7FD6CE;
+  --warn:#E3A85F; --warn-soft:#2E2211; --warn-line:#5B4322;
+  --danger:#F0857B; --danger-soft:#33160F; --danger-line:#663029;
+  --ok:#63C990; --ok-soft:#0F2C1D; --ok-line:#255B3C;
+  --code-bg:#060E10; --code-fg:#CADCE1; --code-line:#1B2C31;
+  --code-dim:#6D868D; --code-hi:#67C9C2; --code-warn:#E8B473;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -14px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  font-size:17px; line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4,.ui{font-family:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,sans-serif}
+code,pre,kbd,.mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Consolas,monospace}
+
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+
+/* ---------- masthead ---------- */
+.masthead{border-bottom:1px solid var(--line);background:var(--surface)}
+.masthead .wrap{padding-top:56px;padding-bottom:44px}
+.eyebrow{
+  font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--accent);margin:0 0 18px;font-weight:500;
+}
+h1{
+  font-size:clamp(2.1rem,5.2vw,3.3rem); line-height:1.08; margin:0 0 18px;
+  font-weight:700; letter-spacing:-.022em; text-wrap:balance; max-width:16ch;
+}
+.standfirst{
+  font-size:1.13rem;color:var(--ink-2);max-width:60ch;margin:0 0 28px;
+}
+.meta{
+  display:flex;flex-wrap:wrap;gap:10px;
+}
+.chip{
+  font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.04em;
+  padding:5px 11px;border-radius:2px;border:1px solid var(--line-strong);
+  color:var(--ink-2);background:var(--ground);
+}
+.chip strong{color:var(--ink);font-weight:600}
+
+/* ---------- layout ---------- */
+.shell{display:grid;grid-template-columns:1fr;gap:0}
+@media (min-width:1000px){
+  .shell{grid-template-columns:236px minmax(0,1fr);gap:56px;align-items:start}
+}
+.rail{display:none}
+@media (min-width:1000px){
+  .rail{
+    display:block;position:sticky;top:0;max-height:100vh;overflow-y:auto;
+    padding:44px 0 44px;
+  }
+}
+.rail h2{
+  font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 14px;font-weight:600;
+  font-family:"IBM Plex Mono",monospace;
+}
+.rail ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px}
+.rail a{
+  display:grid;grid-template-columns:22px 1fr;gap:8px;align-items:baseline;
+  padding:5px 8px;color:var(--ink-2);text-decoration:none;font-size:13.5px;
+  font-family:"IBM Plex Sans",sans-serif;border-radius:3px;line-height:1.35;
+}
+.rail a:hover{background:var(--surface-2);color:var(--ink)}
+.rail a .n{
+  font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted);
+  font-variant-numeric:tabular-nums;
+}
+main{padding:44px 0 96px;min-width:0}
+
+/* ---------- sections ---------- */
+section{margin:0 0 64px;scroll-margin-top:24px}
+section > h2{
+  font-size:1.05rem;font-weight:600;letter-spacing:-.006em;margin:0 0 6px;
+  display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:baseline;
+}
+section > h2 .n{
+  font-family:"IBM Plex Mono",monospace;font-size:.78rem;color:var(--accent);
+  font-weight:500;font-variant-numeric:tabular-nums;
+}
+.rule{height:1px;background:var(--line);margin:0 0 22px}
+h3{
+  font-size:.95rem;font-weight:600;margin:34px 0 10px;color:var(--ink);
+  letter-spacing:-.004em;
+}
+p{margin:0 0 16px;max-width:66ch}
+ul,ol.body{max-width:66ch;margin:0 0 16px;padding-left:1.15em}
+li{margin:0 0 7px}
+strong{font-weight:600}
+a{color:var(--accent-ink);text-decoration-thickness:1px;text-underline-offset:2px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+
+/* ---------- inline code ---------- */
+p code,li code,td code,th code,dd code{
+  font-size:.855em;background:var(--surface-2);color:var(--ink);
+  padding:1.5px 5px;border-radius:3px;border:1px solid var(--line);
+  word-break:break-word;
+}
+
+/* ---------- terminal blocks ---------- */
+.term{margin:0 0 20px;border-radius:5px;overflow:hidden;box-shadow:var(--shadow);border:1px solid var(--code-line)}
+.term figcaption{
+  display:flex;align-items:center;gap:8px;
+  background:var(--code-line);color:var(--code-fg);
+  font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.06em;
+  padding:7px 13px;text-transform:uppercase;font-weight:500;
+}
+.term figcaption .dot{width:7px;height:7px;border-radius:50%;flex:none}
+.term--local figcaption .dot{background:var(--code-warn)}
+.term--remote figcaption .dot{background:var(--code-hi)}
+.term--file figcaption .dot{background:var(--code-dim)}
+.term figcaption .where{margin-left:auto;color:var(--code-dim);letter-spacing:.04em;text-transform:none}
+.term pre{
+  margin:0;background:var(--code-bg);color:var(--code-fg);
+  padding:15px 16px;overflow-x:auto;font-size:13px;line-height:1.62;
+}
+.term pre code{white-space:pre}
+.term .c{color:var(--code-dim)}
+.term .k{color:var(--code-hi)}
+.term .w{color:var(--code-warn)}
+
+/* output-only block */
+.out{margin:0 0 20px;border:1px solid var(--line);border-left:3px solid var(--muted);
+  background:var(--surface);border-radius:0 4px 4px 0}
+.out pre{margin:0;padding:13px 15px;overflow-x:auto;font-size:12.5px;line-height:1.6;
+  color:var(--ink-2);font-family:"IBM Plex Mono",monospace}
+
+/* ---------- callouts ---------- */
+.note{
+  border:1px solid var(--line);border-left:3px solid var(--accent);
+  background:var(--surface);padding:15px 18px;margin:0 0 20px;border-radius:0 4px 4px 0;
+}
+.note.warn{border-left-color:var(--warn);background:var(--warn-soft);border-color:var(--warn-line)}
+.note.danger{border-left-color:var(--danger);background:var(--danger-soft);border-color:var(--danger-line)}
+.note.ok{border-left-color:var(--ok);background:var(--ok-soft);border-color:var(--ok-line)}
+.note > *:last-child{margin-bottom:0}
+.note .label{
+  font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.14em;
+  text-transform:uppercase;font-weight:600;display:block;margin-bottom:7px;color:var(--accent);
+}
+.note.warn .label{color:var(--warn)}
+.note.danger .label{color:var(--danger)}
+.note.ok .label{color:var(--ok)}
+.note p{max-width:62ch}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto;margin:0 0 20px;border:1px solid var(--line);border-radius:5px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-family:"IBM Plex Sans",sans-serif;font-size:13.5px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+thead th{
+  font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+  font-weight:600;background:var(--surface-2);white-space:nowrap;
+  font-family:"IBM Plex Mono",monospace;
+}
+tbody tr:last-child td{border-bottom:none}
+td.num{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+.yes{color:var(--danger);font-weight:600}
+.no{color:var(--ok);font-weight:600}
+
+/* ---------- gotcha ---------- */
+.gotcha{border:1px solid var(--line);border-radius:5px;background:var(--surface);padding:16px 18px;margin:0 0 20px}
+.gotcha h4{margin:0 0 8px;font-size:.9rem;font-weight:600}
+.gotcha > *:last-child{margin-bottom:0}
+.gotcha p{max-width:62ch}
+
+kbd{
+  font-size:11.5px;padding:2px 6px;border:1px solid var(--line-strong);
+  border-bottom-width:2px;border-radius:3px;background:var(--surface);color:var(--ink);
+  white-space:nowrap;
+}
+
+.lessons{list-style:none;padding:0;margin:0;counter-reset:l;max-width:none}
+.lessons li{
+  counter-increment:l;display:grid;grid-template-columns:30px 1fr;gap:12px;
+  padding:11px 0;border-bottom:1px solid var(--line);margin:0;max-width:none;
+}
+.lessons li:last-child{border-bottom:none}
+.lessons li::before{
+  content:counter(l,decimal-leading-zero);
+  font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--accent);
+  font-variant-numeric:tabular-nums;padding-top:3px;
+}
+.lessons li > span{font-size:15px}
+
+footer{border-top:1px solid var(--line);background:var(--surface);margin-top:0}
+footer .wrap{padding:28px 24px;color:var(--muted);font-size:13px;
+  font-family:"IBM Plex Sans",sans-serif}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+<style>
+/* Standalone-page mobile polish (the artifact host supplied none of this). */
+html{-webkit-text-size-adjust:100%}
+@media (max-width:600px){
+  .wrap{padding:0 16px}
+  .masthead .wrap{padding-top:34px;padding-bottom:28px}
+  body{font-size:16px}
+  pre,code{font-size:12.5px}
+  /* long AWS commands and URLs must not push the page sideways */
+  p code,li code,td code{overflow-wrap:anywhere;word-break:break-word}
+}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">Field guide · AWS EC2</p>
+    <h1>EC2 Dev Box Runbook</h1>
+    <p class="standfirst">Standing up a remote Linux development machine on AWS, wiring it into VS&nbsp;Code, and serving something to the public internet — with every failure that actually happened and the error text it produced.</p>
+    <div class="meta">
+      <span class="chip">Built <strong>2026-08-31</strong></span>
+      <span class="chip">Windows 10 · Git Bash + PowerShell</span>
+      <span class="chip">Ubuntu 24.04 · t3.micro</span>
+      <span class="chip">Region <strong>us-east-1</strong></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+<div class="shell">
+
+  <nav class="rail" aria-label="Sections">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#s0"><span class="n">00</span><span>What EC2 is</span></a></li>
+      <li><a href="#s1"><span class="n">01</span><span>Generate a key pair</span></a></li>
+      <li><a href="#s2"><span class="n">02</span><span>Launch an instance</span></a></li>
+      <li><a href="#s3"><span class="n">03</span><span>Rescue a keyless box</span></a></li>
+      <li><a href="#s4"><span class="n">04</span><span>SSH shortcut</span></a></li>
+      <li><a href="#s5"><span class="n">05</span><span>Lock the firewall</span></a></li>
+      <li><a href="#s6"><span class="n">06</span><span>VS Code Remote-SSH</span></a></li>
+      <li><a href="#s7"><span class="n">07</span><span>Prepare the server</span></a></li>
+      <li><a href="#s8"><span class="n">08</span><span>Notebooks on EC2</span></a></li>
+      <li><a href="#s9"><span class="n">09</span><span>Serve to the internet</span></a></li>
+      <li><a href="#s10"><span class="n">10</span><span>Cost &amp; budgets</span></a></li>
+      <li><a href="#s11"><span class="n">11</span><span>Stop vs terminate</span></a></li>
+      <li><a href="#s12"><span class="n">12</span><span>The stop routine</span></a></li>
+      <li><a href="#cheat"><span class="n">§</span><span>Cheat sheet</span></a></li>
+      <li><a href="#lessons"><span class="n">§</span><span>Lessons</span></a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+  <section id="setup">
+    <h2><span class="n">§</span><span>Fill these in first</span></h2>
+    <div class="rule"></div>
+    <p>Run this once per PowerShell session — everything below references these variables.</p>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>PowerShell<span class="where">your laptop</span></figcaption>
+<pre><code>$ACCT = "123456789012"           <span class="c"># aws sts get-caller-identity --query Account --output text</span>
+$KEY  = "my-laptop"              <span class="c"># name for your key pair in AWS</span>
+$IID  = "i-0123456789abcdef0"    <span class="c"># instance id, once you have one</span>
+$SG   = "sg-0123456789abcdef0"   <span class="c"># security group id</span>
+$VOL  = "vol-0123456789abcdef0"  <span class="c"># root volume id</span></code></pre>
+    </figure>
+    <p>Find them any time:</p>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>PowerShell<span class="where">your laptop</span></figcaption>
+<pre><code>aws sts get-caller-identity
+
+aws ec2 describe-instances `
+  --query 'Reservations[].Instances[].{ID:InstanceId,State:State.Name,IP:PublicIpAddress,SG:SecurityGroups[0].GroupId}' `
+  --output table</code></pre>
+    </figure>
+    <div class="note">
+      <span class="label">Platform note</span>
+      <p>Use PowerShell for <code>aws</code> commands. <code>aws.exe</code> is a Windows binary and won't understand Git Bash paths like <code>/c/Users/...</code>. It installs to <code>C:\Program Files\Amazon\AWSCLIV2\aws.exe</code>.</p>
+    </div>
+  </section>
+
+  <section id="s0">
+    <h2><span class="n">00</span><span>What EC2 is, and when it's worth it</span></h2>
+    <div class="rule"></div>
+    <p>EC2 is <strong>a computer you rent by the second in a data center</strong>. That's the whole idea. You SSH in and it's an ordinary Linux box — except it has a public IP and keeps running when your laptop is closed.</p>
+    <p>Use it when you need one of these:</p>
+    <ul>
+      <li><strong>It must stay up when your laptop sleeps</strong> — web server, API, bot, cron job</li>
+      <li><strong>It must be publicly reachable</strong> — webhooks, a demo URL others can open</li>
+      <li><strong>It must be bigger than your laptop</strong> — lots of RAM, or a GPU, for a few hours</li>
+      <li><strong>It must be disposable</strong> — break it, terminate it, relaunch clean in 60 seconds</li>
+      <li><strong>It must be a consistent Linux env</strong> — the same box for the whole team</li>
+    </ul>
+    <p>Otherwise, run it locally. It's just someone else's computer.</p>
+    <div class="note warn">
+      <span class="label">Reality check</span>
+      <p>A t3.micro has 1&nbsp;GB RAM and 2 vCPU — <em>less capable than free Google Colab</em>. It's an excellent web server and Linux practice box; it is not an ML machine. For that you want a GPU instance (<code>g4dn.xlarge</code>, ~$0.53/hr), which requires a quota-increase request before you can launch one.</p>
+    </div>
+  </section>
+
+  <section id="s1">
+    <h2><span class="n">01</span><span>Generate an SSH key pair</span></h2>
+    <div class="rule"></div>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>Git Bash<span class="where">your laptop</span></figcaption>
+<pre><code>mkdir -p ~/.ssh &amp;&amp; chmod 700 ~/.ssh
+ssh-keygen -t ed25519 -f ~/.ssh/ec2-key -C "my-laptop" -N ""</code></pre>
+    </figure>
+    <p>In PowerShell the quoting differs — <code>-N ""</code> is <em>not</em> empty there:</p>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>PowerShell<span class="where">your laptop</span></figcaption>
+<pre><code>New-Item -ItemType Directory -Force "$env:USERPROFILE\.ssh" | Out-Null
+ssh-keygen -t ed25519 -f "$env:USERPROFILE\.ssh\ec2-key" -C "my-laptop" -N '""'</code></pre>
+    </figure>
+    <ul>
+      <li><code>ec2-key</code> — <strong>private key, never share it</strong></li>
+      <li><code>ec2-key.pub</code> — public key, safe to paste anywhere</li>
+    </ul>
+    <p>Omit <code>-N</code> entirely to be prompted for a passphrase — more secure, and you type it on each connect.</p>
+
+    <h3>Fix the key permissions — Windows-specific, and it will bite you</h3>
+    <p>SSH refuses to use a private key other accounts can read. On Windows, <code>chmod 600</code> from Git Bash often does <strong>not</strong> stick — you must set the NTFS ACL.</p>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>Git Bash<span class="where">your laptop</span></figcaption>
+<pre><code>export MSYS_NO_PATHCONV=1      <span class="c"># stop Git Bash rewriting /flags into paths</span>
+KEYPATH="C:\Users\$USERNAME\.ssh\ec2-key"
+WINUSER=$(/c/Windows/System32/whoami.exe | tr -d '\r')   <span class="c"># -&gt; machine\user</span>
+icacls "$KEYPATH" /reset
+icacls "$KEYPATH" /inheritance:r /grant:r "${WINUSER}:R"
+icacls "$KEYPATH"              <span class="c"># verify: exactly ONE entry, your account</span></code></pre>
+    </figure>
+    <div class="note danger">
+      <span class="label">The trap</span>
+      <p>Use the full <code>machine\user</code>, never the bare username. Git Bash's <code>whoami</code> and PowerShell's <code>$env:USERNAME</code> both return only half of it. <code>icacls</code> accepts it, resolves it to a <strong>bogus principal</strong>, and combined with <code>/inheritance:r</code> locks <em>you</em> out of your own key:</p>
+      <div class="out"><pre>Load key "C:\Users\...\ec2-key": Permission denied
+ubuntu@1.2.3.4: Permission denied (publickey).</pre></div>
+      <p>Recover by re-running <code>/reset</code> then <code>/grant:r</code> with the full <code>machine\user</code>.</p>
+    </div>
+  </section>
+
+  <section id="s2">
+    <h2><span class="n">02</span><span>Launch an instance</span></h2>
+    <div class="rule"></div>
+    <h3>Register your public key with AWS</h3>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>PowerShell<span class="where">your laptop</span></figcaption>
+<pre><code>aws ec2 import-key-pair --key-name $KEY `
+  --public-key-material "fileb://$env:USERPROFILE/.ssh/ec2-key.pub"</code></pre>
+    </figure>
+    <p><code>fileb://</code> (binary) rather than <code>file://</code> — the text form can mangle the key on Windows.</p>
+
+    <h3>Look up the AMI — never hardcode it</h3>
+    <p>AMI IDs are <strong>region-specific and change constantly</strong>. This box was built on <code>ami-0f8a61b66d1accaee</code>; weeks later the current Ubuntu 24.04 image was <code>ami-0d7f022123f8ff19d</code>. Always resolve it from an SSM public parameter.</p>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>PowerShell<span class="where">your laptop</span></figcaption>
+<pre><code><span class="c"># Ubuntu 24.04 LTS</span>
+$AMI = aws ssm get-parameters `
+  --names "/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id" `
+  --query "Parameters[0].Value" --output text
+
+<span class="c"># Amazon Linux 2023 alternative:</span>
+<span class="c"># --names "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"</span>
+
+echo $AMI</code></pre>
+    </figure>
+    <div class="note warn">
+      <span class="label">Git Bash</span>
+      <p>Set <code>export MSYS_NO_PATHCONV=1</code> first, or the leading <code>/aws/...</code> becomes <code>C:/Program Files/Git/aws/...</code> and the call returns <code>InvalidParameters</code> with no error message.</p>
+    </div>
+
+    <h3>Create a security group</h3>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>PowerShell<span class="where">your laptop</span></figcaption>
+<pre><code>$myip = (Invoke-RestMethod https://checkip.amazonaws.com).Trim()
+
+$SG = aws ec2 create-security-group --group-name dev-box-sg `
+  --description "SSH from my IP, HTTP/HTTPS public" `
+  --query "GroupId" --output text
+
+<span class="c"># SSH: your IP only</span>
+aws ec2 authorize-security-group-ingress --group-id $SG `
+  --protocol tcp --port 22 --cidr "$myip/32"
+
+<span class="c"># HTTP/HTTPS: public (skip if you aren't serving anything)</span>
+aws ec2 authorize-security-group-ingress --group-id $SG --protocol tcp --port 80  --cidr 0.0.0.0/0
+aws ec2 authorize-security-group-ingress --group-id $SG --protocol tcp --port 443 --cidr 0.0.0.0/0</code></pre>
+    </figure>
+
+    <h3>Launch it</h3>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>PowerShell<span class="where">your laptop</span></figcaption>
+<pre><code>$IID = aws ec2 run-instances `
+  --image-id $AMI `
+  --instance-type t3.micro `
+  --key-name $KEY `
+  --security-group-ids $SG `
+  --block-device-mappings '[{\"DeviceName\":\"/dev/sda1\",\"Ebs\":{\"VolumeSize\":20,\"VolumeType\":\"gp3\"}}]' `
+  --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=dev-box}]" `
+  --query "Instances[0].InstanceId" --output text
+
+aws ec2 wait instance-status-ok --instance-ids $IID
+
+aws ec2 describe-instances --instance-ids $IID `
+  --query "Reservations[0].Instances[0].PublicIpAddress" --output text</code></pre>
+    </figure>
+    <div class="note">
+      <span class="label">Two things worth knowing</span>
+      <p><strong>Use 20&nbsp;GB, not the 8&nbsp;GB default.</strong> An 8&nbsp;GB root volume hits 95% full from just the OS, VS Code's remote server, and JupyterLab. The extra 12&nbsp;GB costs about $1/month.</p>
+      <p><strong><code>wait instance-status-ok</code> blocks until the OS has actually booted.</strong> <code>running</code> alone means the VM exists, not that sshd is listening.</p>
+    </div>
+  </section>
+
+  <section id="s3">
+    <h2><span class="n">03</span><span>Rescue an instance that has no key pair</span></h2>
+    <div class="rule"></div>
+    <p>If you launched from the console without selecting a key pair, you normally can't log in at all. <strong>EC2 Instance Connect</strong> rescues it by injecting a temporary key — valid <strong>60 seconds</strong> — authorised by your AWS credentials. Ubuntu and Amazon Linux AMIs ship with the agent.</p>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>PowerShell<span class="where">your laptop</span></figcaption>
+<pre><code>aws ec2 start-instances --instance-ids $IID
+aws ec2 wait instance-status-ok --instance-ids $IID
+
+$ip = aws ec2 describe-instances --instance-ids $IID `
+  --query "Reservations[0].Instances[0].PublicIpAddress" --output text
+$az = aws ec2 describe-instances --instance-ids $IID `
+  --query "Reservations[0].Instances[0].Placement.AvailabilityZone" --output text</code></pre>
+    </figure>
+    <p>Inject, then SSH <strong>immediately</strong>:</p>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>PowerShell<span class="where">your laptop</span></figcaption>
+<pre><code>aws ec2-instance-connect send-ssh-public-key `
+  --instance-id $IID `
+  --instance-os-user ubuntu `
+  --availability-zone $az `
+  --ssh-public-key "file://$env:USERPROFILE/.ssh/ec2-key.pub"
+
+ssh -i "$env:USERPROFILE\.ssh\ec2-key" ubuntu@$ip</code></pre>
+    </figure>
+    <p>Then make it permanent, so you never repeat the 60-second dance:</p>
+    <figure class="term term--remote">
+      <figcaption><span class="dot"></span>bash<span class="where">on the instance</span></figcaption>
+<pre><code>mkdir -p ~/.ssh &amp;&amp; chmod 700 ~/.ssh
+echo "ssh-ed25519 AAAA...your-public-key... my-laptop" &gt;&gt; ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys</code></pre>
+    </figure>
+    <p>This needs the security group to allow SSH from the EC2 Instance Connect service range. An open <code>0.0.0.0/0</code> rule satisfies it — but once you lock port 22 to your own IP (§05), use the CLI form above rather than the console button.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>AMI</th><th>Default SSH user</th></tr></thead>
+        <tbody>
+          <tr><td>Ubuntu</td><td><code>ubuntu</code></td></tr>
+          <tr><td>Amazon Linux</td><td><code>ec2-user</code></td></tr>
+          <tr><td>Debian</td><td><code>admin</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="s4">
+    <h2><span class="n">04</span><span>SSH shortcut</span></h2>
+    <div class="rule"></div>
+    <figure class="term term--file">
+      <figcaption><span class="dot"></span>C:\Users\&lt;you&gt;\.ssh\config<span class="where">file</span></figcaption>
+<pre><code>Host ec2
+    HostName &lt;PUBLIC_IP&gt;
+    User ubuntu
+    IdentityFile C:\Users\&lt;you&gt;\.ssh\ec2-key
+    IdentitiesOnly yes
+    ServerAliveInterval 60
+    StrictHostKeyChecking accept-new</code></pre>
+    </figure>
+    <p>Now just <code>ssh ec2</code>.</p>
+    <div class="note warn">
+      <span class="label">The public IP changes on every stop/start</span>
+      <p>A plain <code>reboot</code> keeps it; a stop/start does not. Update <code>HostName</code> each time:</p>
+      <figure class="term term--local" style="margin-top:12px">
+        <figcaption><span class="dot"></span>Git Bash<span class="where">your laptop</span></figcaption>
+<pre><code>NEWIP=$(aws ec2 describe-instances --instance-ids $IID \
+  --query 'Reservations[0].Instances[0].PublicIpAddress' --output text | tr -d '\r')
+sed -i "s/^\( *HostName \).*/\1$NEWIP/" ~/.ssh/config</code></pre>
+      </figure>
+    </div>
+    <p>To pin the address permanently, allocate an Elastic IP. Since AWS began charging for all public IPv4 in Feb&nbsp;2024, an EIP costs the same ~$3.65/mo as the auto-assigned address while running — but unlike the auto-assigned one, it <em>keeps billing when the instance is stopped</em>.</p>
+  </section>
+
+  <section id="s5">
+    <h2><span class="n">05</span><span>Lock down the firewall</span></h2>
+    <div class="rule"></div>
+    <p>A launch-wizard security group opens SSH to <code>0.0.0.0/0</code>. Bots find that within minutes. Restrict port 22 to your IP:</p>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>PowerShell<span class="where">your laptop</span></figcaption>
+<pre><code>$myip = (Invoke-RestMethod https://checkip.amazonaws.com).Trim()
+
+aws ec2 authorize-security-group-ingress --group-id $SG `
+  --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=$myip/32,Description=my-laptop}]"
+
+aws ec2 revoke-security-group-ingress --group-id $SG `
+  --protocol tcp --port 22 --cidr 0.0.0.0/0</code></pre>
+    </figure>
+    <p>Verify:</p>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>PowerShell<span class="where">your laptop</span></figcaption>
+<pre><code>aws ec2 describe-security-groups --group-ids $SG `
+  --query 'SecurityGroups[0].IpPermissions[].{Port:FromPort,Allowed:IpRanges[].CidrIp}' --output json</code></pre>
+    </figure>
+    <div class="note">
+      <span class="label">The security group is the firewall</span>
+      <p>Same machine, same network interface: port 80 open to the world, port 22 open only to you. Getting this wrong is how instances get compromised.</p>
+      <p><strong>Home IPs rotate.</strong> When <code>ssh ec2</code> starts timing out for no reason, that's the first thing to check — re-run the <code>authorize</code> command with your new IP.</p>
+    </div>
+  </section>
+
+  <section id="s6">
+    <h2><span class="n">06</span><span>VS Code Remote-SSH</span></h2>
+    <div class="rule"></div>
+    <p>Files, terminal, Python interpreter and extensions all run <strong>on the server</strong>; only the UI is local.</p>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>bash<span class="where">your laptop</span></figcaption>
+<pre><code>code --install-extension ms-vscode-remote.remote-ssh</code></pre>
+    </figure>
+    <p>Connect with <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> → <strong>Remote-SSH: Connect to Host</strong> → <code>ec2</code>. Or from a terminal: <code>code --remote ssh-remote+ec2 /home/ubuntu/projects</code>. Look for a green <strong>SSH: ec2</strong> badge bottom-left; <kbd>Ctrl</kbd>+<kbd>`</kbd> then opens a terminal <em>on EC2</em>.</p>
+
+    <h3>The most common Windows failure</h3>
+    <div class="gotcha">
+      <h4><code>bash: line 1: powershell: command not found</code></h4>
+      <div class="out"><pre>[Remote - SSH] remote.SSH.remotePlatform = {}
+Running script with connection command: ssh -T -D 60235 ec2 powershell
+&gt; bash: line 1: powershell: command not found
+&gt; Resolver error</pre></div>
+      <p>VS Code doesn't know the remote OS, so on a Windows client it <strong>assumes the remote is Windows</strong> and types <code>powershell</code> at your bash prompt. Normally it shows a "Select the platform of the remote host" quick-pick — but launching from the CLI with <code>--remote</code> skips that prompt entirely, so it never gets answered.</p>
+    </div>
+    <p>Fix it permanently in <code>%APPDATA%\Code\User\settings.json</code>:</p>
+    <figure class="term term--file">
+      <figcaption><span class="dot"></span>settings.json<span class="where">file</span></figcaption>
+<pre><code>{
+    "remote.SSH.remotePlatform": { "ec2": "linux" },
+    "remote.SSH.connectTimeout": 60,
+    "remote.SSH.defaultExtensions": ["ms-python.python", "ms-toolsai.jupyter"]
+}</code></pre>
+    </figure>
+    <p>Success looks like this — note <code>sh</code>, not <code>powershell</code>:</p>
+    <div class="out"><pre>remote.SSH.remotePlatform = {"ec2":"linux"}
+Running script with connection command: ssh -T -D 60312 ec2 sh
+Remote server is listening on port 46219</pre></div>
+    <div class="note ok">
+      <span class="label">Where to debug</span>
+      <p>Output panel → <strong>"Remote - SSH"</strong> in the dropdown. On disk: <code>%APPDATA%\Code\logs\&lt;timestamp&gt;\window&lt;N&gt;\exthost\output_logging_*\*Remote - SSH.log</code></p>
+    </div>
+  </section>
+
+  <section id="s7">
+    <h2><span class="n">07</span><span>Prepare the server</span></h2>
+    <div class="rule"></div>
+    <p>1&nbsp;GB RAM is tight — <strong>add swap first</strong>, or pip installs get OOM-killed:</p>
+    <figure class="term term--remote">
+      <figcaption><span class="dot"></span>bash<span class="where">on the instance</span></figcaption>
+<pre><code>sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab   <span class="c"># survives reboot</span>
+free -h</code></pre>
+    </figure>
+    <figure class="term term--remote">
+      <figcaption><span class="dot"></span>bash<span class="where">on the instance</span></figcaption>
+<pre><code>sudo apt-get update -qq
+sudo apt-get install -y python3-pip python3-venv
+mkdir -p ~/projects &amp;&amp; cd ~/projects
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install jupyterlab pandas</code></pre>
+    </figure>
+
+    <h3>The 8 GB default disk is a trap</h3>
+    <p>Real numbers from this build, on a fresh 8&nbsp;GB volume:</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Consumer</th><th>Size</th></tr></thead>
+        <tbody>
+          <tr><td><code>/usr</code> — the OS</td><td class="num">1.8 GB</td></tr>
+          <tr><td><code>.vscode-server</code> — server 700 MB + extensions 284 MB</td><td class="num">~1.0 GB</td></tr>
+          <tr><td><code>projects/venv</code> — JupyterLab + pandas</td><td class="num">367 MB</td></tr>
+          <tr><td><code>/var</code></td><td class="num">600 MB</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>That reached <strong>95% full</strong>, at which point kernels die mid-execution and pip installs fail halfway.</p>
+    <figure class="term term--remote">
+      <figcaption><span class="dot"></span>bash<span class="where">on the instance</span></figcaption>
+<pre><code>sudo apt-get clean &amp;&amp; sudo apt-get autoremove -y
+rm -rf ~/.cache/pip
+sudo journalctl --vacuum-size=50M
+du -sh ~/.vscode-server/cli/servers/*     <span class="c"># one ~700 MB dir PER VS Code version</span>
+df -h /</code></pre>
+    </figure>
+    <p>VS Code keeps a full server download for every version it has ever connected with. Delete all but the current commit — it's named in the Remote-SSH log as <code>Using commit id &lt;hash&gt; for server</code>.</p>
+
+    <h3>Growing the volume</h3>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>PowerShell<span class="where">your laptop</span></figcaption>
+<pre><code>aws ec2 modify-volume --volume-id $VOL --size 20</code></pre>
+    </figure>
+    <div class="note danger">
+      <span class="label">Check the device name — do not assume it</span>
+      <p>Nitro-based instances (t3, t4g, m5, c5 and newer) show <code>nvme0n1</code>; older Xen families (t2, m4) show <code>xvda</code>. Running <code>growpart</code> against the wrong device is a bad time. Use whatever <code>lsblk</code> actually reports.</p>
+    </div>
+    <figure class="term term--remote">
+      <figcaption><span class="dot"></span>bash<span class="where">on the instance</span></figcaption>
+<pre><code>lsblk
+
+<span class="c"># if lsblk shows nvme0n1 with partition nvme0n1p1</span>
+sudo growpart /dev/nvme0n1 1 &amp;&amp; sudo resize2fs /dev/nvme0n1p1
+
+<span class="c"># if lsblk shows xvda with partition xvda1</span>
+sudo growpart /dev/xvda 1 &amp;&amp; sudo resize2fs /dev/xvda1
+
+df -h /</code></pre>
+    </figure>
+    <p>It resizes live, with no downtime and no data loss. <strong>EBS volumes cannot be shrunk</strong> — this is one-directional.</p>
+  </section>
+
+  <section id="s8">
+    <h2><span class="n">08</span><span>Jupyter notebooks in VS Code — the real Colab replacement</span></h2>
+    <div class="rule"></div>
+    <figure class="term term--remote">
+      <figcaption><span class="dot"></span>bash<span class="where">on the instance</span></figcaption>
+<pre><code>source ~/projects/venv/bin/activate
+pip install ipykernel
+python -m ipykernel install --user --name projects-venv \
+       --display-name "Python (projects venv)"
+jupyter kernelspec list      <span class="c"># verify it appears</span></code></pre>
+    </figure>
+    <p>Make sure the Python and Jupyter extensions install <strong>on the remote</strong> via <code>remote.SSH.defaultExtensions</code> (see §06). Then open any <code>.ipynb</code> in the <strong>SSH: ec2</strong> window → <strong>Select Kernel</strong> → <strong>Jupyter Kernel</strong> → <strong>Python (projects venv)</strong>.</p>
+    <p>The notebook file, the kernel, the interpreter and every variable in memory live on EC2. VS Code is a viewport. No session timeouts, files persist between sessions, and you control the machine.</p>
+
+    <h3>Proof you're really on EC2</h3>
+    <p>The instance metadata service answers only from inside an instance, so this hangs forever on a laptop:</p>
+    <figure class="term term--remote">
+      <figcaption><span class="dot"></span>python<span class="where">kernel on the instance</span></figcaption>
+<pre><code>import urllib.request
+
+def imds(path):
+    tok = urllib.request.urlopen(urllib.request.Request(
+        "http://169.254.169.254/latest/api/token",
+        headers={"X-aws-ec2-metadata-token-ttl-seconds": "60"},
+        method="PUT")).read()
+    return urllib.request.urlopen(urllib.request.Request(
+        "http://169.254.169.254/latest/meta-data/" + path,
+        headers={"X-aws-ec2-metadata-token": tok})).read().decode()
+
+for f in ["instance-id", "instance-type", "placement/availability-zone"]:
+    print(f"{f:32} {imds(f)}")</code></pre>
+    </figure>
+    <p><code>169.254.169.254</code> is a link-local address routable only inside EC2. The two-step token exchange is IMDSv2, required by default on new instances.</p>
+    <div class="note">
+      <span class="label">If you specifically want the Colab UI</span>
+      <p>Install <code>jupyter_http_over_ws</code>, run JupyterLab on the instance, tunnel it with <code>ssh -N -L 8888:localhost:8888 ec2</code>, then use Colab's <strong>Connect to a local runtime</strong> with the <code>localhost:8888/?token=...</code> URL. Colab only accepts <code>localhost</code>, which is why the tunnel is mandatory. For most work the VS Code route above is simply better.</p>
+    </div>
+  </section>
+
+  <section id="s9">
+    <h2><span class="n">09</span><span>Serve something to the public internet</span></h2>
+    <div class="rule"></div>
+    <p>This is the part your laptop cannot do.</p>
+    <figure class="term term--file">
+      <figcaption><span class="dot"></span>/etc/systemd/system/demo-site.service<span class="where">file</span></figcaption>
+<pre><code>[Unit]
+Description=Demo static site on port 80
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 -m http.server 80 --directory /home/ubuntu/site
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+    </figure>
+    <figure class="term term--remote">
+      <figcaption><span class="dot"></span>bash<span class="where">on the instance</span></figcaption>
+<pre><code>sudo systemctl daemon-reload
+sudo systemctl enable --now demo-site
+systemctl is-active demo-site                                  <span class="c"># -&gt; active</span>
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost/      <span class="c"># -&gt; 200</span></code></pre>
+    </figure>
+    <p>Then open <code>http://&lt;PUBLIC_IP&gt;</code> <strong>on your phone with wifi off</strong>. It loads. Close your laptop — it still loads.</p>
+    <ul>
+      <li><code>--now</code> starts it; <code>enable</code> brings it back <strong>after reboot</strong></li>
+      <li><code>Restart=always</code> relaunches it on crash — test with <code>sudo pkill -f http.server</code></li>
+      <li><strong>Type <code>http://</code> explicitly.</strong> Phone browsers auto-upgrade to HTTPS (nothing listens on 443), and a bare IP often becomes a search query. Both look exactly like "the server is down."</li>
+    </ul>
+
+    <h3>Debugging gotchas that cost real time</h3>
+    <div class="gotcha">
+      <h4><code>Address already in use</code> means it's <em>working</em></h4>
+      <div class="out"><pre>OSError: [Errno 98] Address already in use</pre></div>
+      <p>Running the command by hand while the service already holds the port produces this. It proves the port is bound. It is not evidence of a fault.</p>
+    </div>
+    <div class="gotcha">
+      <h4>Don't race the socket</h4>
+      <p>Checking <code>ss</code> or <code>curl</code> in the same command as <code>systemctl enable --now</code> reports "nothing listening" — because Python hasn't finished binding yet. Check as a separate step.</p>
+    </div>
+    <div class="gotcha">
+      <h4>Run server commands on the server</h4>
+      <p>A prompt reading <code>PS C:\Users\you&gt;</code> is your laptop; <code>ubuntu@ip-172-31-17-135:~$</code> is EC2. Pasting <code>sudo ...</code> into PowerShell just errors — and a staged unit file that was never moved into <code>/etc/systemd/system/</code> means nothing is running at all.</p>
+    </div>
+    <p>Full sweep when something is unreachable:</p>
+    <figure class="term term--remote">
+      <figcaption><span class="dot"></span>bash<span class="where">on the instance</span></figcaption>
+<pre><code>systemctl is-active demo-site      <span class="c"># is the service up?</span>
+ss -tln | grep ':80'               <span class="c"># is anything bound?</span>
+curl http://localhost/             <span class="c"># does it work locally?</span>
+sudo ufw status                    <span class="c"># host firewall blocking?</span>
+<span class="c"># then: security group rules, and confirm the public IP hasn't changed</span></code></pre>
+    </figure>
+    <div class="note warn">
+      <span class="label">Not for production</span>
+      <p><code>python -m http.server</code> is a toy — single-threaded, no HTTPS, no access control. Real deployments use nginx in front of gunicorn/uvicorn, plus certbot for TLS, which needs a domain name pointed at the IP.</p>
+    </div>
+  </section>
+
+  <section id="s10">
+    <h2><span class="n">10</span><span>Cost control and budget alarms</span></h2>
+    <div class="rule"></div>
+    <p><code>us-east-1</code> pricing:</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Item</th><th>Cost</th><th>Billed while stopped?</th></tr></thead>
+        <tbody>
+          <tr><td>t3.micro compute</td><td class="num">$0.0104/hr · ~$7.60/mo</td><td class="no">No</td></tr>
+          <tr><td>Public IPv4 address</td><td class="num">$0.005/hr · ~$3.65/mo</td><td class="no">No — released on stop</td></tr>
+          <tr><td>EBS root disk, gp3</td><td class="num">$0.08/GB-mo → $0.64 @ 8 GB, $1.60 @ 20 GB</td><td class="yes">Yes — always</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><strong>Stop the instance when you're done.</strong> This one habit keeps it near-free.</p>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>PowerShell<span class="where">your laptop</span></figcaption>
+<pre><code>aws ec2 stop-instances --instance-ids $IID</code></pre>
+    </figure>
+
+    <h3>Set a budget alarm on day one</h3>
+    <figure class="term term--file">
+      <figcaption><span class="dot"></span>budget.json<span class="where">file</span></figcaption>
+<pre><code>{
+  "BudgetName": "monthly-5-usd",
+  "BudgetLimit": { "Amount": "5", "Unit": "USD" },
+  "TimeUnit": "MONTHLY",
+  "BudgetType": "COST"
+}</code></pre>
+    </figure>
+    <figure class="term term--file">
+      <figcaption><span class="dot"></span>notifications.json<span class="where">file</span></figcaption>
+<pre><code>[
+  { "Notification": { "NotificationType": "ACTUAL", "ComparisonOperator": "GREATER_THAN",
+      "Threshold": 80, "ThresholdType": "PERCENTAGE" },
+    "Subscribers": [ { "SubscriptionType": "EMAIL", "Address": "you@example.com" } ] },
+  { "Notification": { "NotificationType": "FORECASTED", "ComparisonOperator": "GREATER_THAN",
+      "Threshold": 100, "ThresholdType": "PERCENTAGE" },
+    "Subscribers": [ { "SubscriptionType": "EMAIL", "Address": "you@example.com" } ] }
+]</code></pre>
+    </figure>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>PowerShell<span class="where">your laptop</span></figcaption>
+<pre><code>aws budgets create-budget --account-id $ACCT `
+  --budget file://budget.json `
+  --notifications-with-subscribers file://notifications.json
+
+aws budgets describe-budgets --account-id $ACCT --output table</code></pre>
+    </figure>
+    <div class="note ok">
+      <span class="label">Forecasted alerts are the valuable ones</span>
+      <p>They warn you on day 3 that you're on track to blow the budget, rather than telling you after the money is gone.</p>
+    </div>
+    <p><code>aws ce get-cost-and-usage</code> (Cost Explorer) returns <code>AccessDeniedException: User not enabled for cost explorer access</code> until it's switched on once from the root account in the Billing console. Budgets works without it.</p>
+    <p>Check which free tier applies under <strong>Billing → Free Tier</strong>. Accounts created before ~July 2025 get 750 hrs/month of t2/t3.micro for 12 months; newer accounts get a credit-based free plan instead.</p>
+  </section>
+
+  <section id="s11">
+    <h2><span class="n">11</span><span>Stop vs terminate, and auditing with CloudTrail</span></h2>
+    <div class="rule"></div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th></th><th>Compute billing</th><th>Your data</th><th>Public IP</th></tr></thead>
+        <tbody>
+          <tr><td><strong>stop</strong></td><td>ends</td><td class="no">survives — EBS volume kept</td><td>lost</td></tr>
+          <tr><td><strong>terminate</strong></td><td>ends</td><td class="yes">destroyed forever</td><td>lost</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note danger">
+      <span class="label">There is no undo</span>
+      <p><code>DeleteOnTermination</code> defaults to <strong>true</strong> on the root volume. Terminating an instance silently deletes the disk — code, venvs, installed packages, config, everything. No undo, no recycle bin.</p>
+    </div>
+    <p>Protect a volume you care about:</p>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>PowerShell<span class="where">your laptop</span></figcaption>
+<pre><code>aws ec2 modify-instance-attribute --instance-id $IID `
+  --block-device-mappings '[{\"DeviceName\":\"/dev/sda1\",\"Ebs\":{\"DeleteOnTermination\":false}}]'</code></pre>
+    </figure>
+    <p>Use the device name from <code>describe-instances</code> — it may be <code>/dev/sda1</code> or <code>/dev/xvda</code> depending on the AMI. Or just snapshot before anything risky: <code>aws ec2 create-snapshot --volume-id $VOL --description "before experiment"</code>.</p>
+
+    <h3>Find out who did what</h3>
+    <p>CloudTrail records every API call, searchable for 90 days at no cost:</p>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>PowerShell<span class="where">your laptop</span></figcaption>
+<pre><code>aws cloudtrail lookup-events --start-time 2026-08-31T16:00:00Z --max-results 40 `
+  --query 'Events[].{Time:EventTime,Event:EventName,User:Username}' --output table</code></pre>
+    </figure>
+    <p>The <code>Username</code> column is the useful part — <code>root</code> means someone was clicking in the console, your IAM username means it came from a script or the CLI. That's how you establish whether a resource died from a click or a command:</p>
+    <div class="out"><pre>23:33:27  StopInstances       dev-user     &lt;- CLI
+23:33:46  TerminateInstances  root         &lt;- console</pre></div>
+    <div class="note warn">
+      <span class="label">Don't operate as root</span>
+      <p>AWS recommends the root account only for account-level tasks — billing settings, closing the account. Do daily work as an IAM user with MFA enabled. Root has no permission boundaries and cannot be restricted.</p>
+    </div>
+  </section>
+
+  <section id="s12">
+    <h2><span class="n">12</span><span>The stop routine — how to actually stop paying</span></h2>
+    <div class="rule"></div>
+    <p>Section 11 explains what <code>stop</code> <em>means</em>. This is the habit that turns it into money saved. Compute bills per second, so a box you stop after class costs a few cents a day instead of $7.60 a month.</p>
+
+    <h3>End of every session</h3>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>PowerShell<span class="where">your laptop</span></figcaption>
+<pre><code>aws ec2 stop-instances --instance-ids $IID
+aws ec2 wait instance-stopped --instance-ids $IID
+aws ec2 describe-instances --instance-ids $IID `
+  --query 'Reservations[].Instances[].State.Name' --output text</code></pre>
+    </figure>
+    <div class="note warn">
+      <span class="label">Wait for <code>stopped</code>, not <code>stopping</code></span>
+      <p><code>stop-instances</code> returns immediately with <code>"CurrentState": "stopping"</code> — that is the API acknowledging your request, not the machine being off. Shutdown takes 30–60 seconds and you are billed for all of it. <code>wait instance-stopped</code> is what turns it into a fact.</p>
+    </div>
+    <p>You can also stop it from inside the box. For an EBS-backed instance the default shutdown behaviour is <code>stop</code>, so <code>sudo shutdown -h now</code> bills identically.</p>
+
+    <h3>What still costs money while stopped</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th></th><th>Stopped</th><th>Note</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Compute</strong></td><td class="no">$0</td><td>this is the whole point</td></tr>
+          <tr><td><strong>EBS root disk</strong></td><td class="yes">$0.64–$1.60/mo</td><td>bills 24/7, stopped or not</td></tr>
+          <tr><td><strong>Auto-assigned public IP</strong></td><td class="no">$0</td><td>released on stop — you get a new one on start</td></tr>
+          <tr><td><strong>Elastic IP</strong></td><td class="yes">~$3.65/mo</td><td>keeps billing while the instance is stopped</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note danger">
+      <span class="label">The Elastic IP catches people</span>
+      <p>Since February 2024 AWS charges for every public IPv4 address, including an Elastic IP sitting idle. If you allocated one for a stable address, a stopped instance still costs ~$3.65/month for it — more than the disk. Find strays with <code>aws ec2 describe-addresses</code> and release what you don't need.</p>
+    </div>
+    <p>So a stopped dev box costs <strong>about $1.60/month</strong>, essentially all disk. If that still bothers you, terminate instead and relaunch next time — section 11 covers what you lose.</p>
+
+    <h3>Starting it back up</h3>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>PowerShell<span class="where">your laptop</span></figcaption>
+<pre><code>aws ec2 start-instances --instance-ids $IID
+aws ec2 wait instance-running --instance-ids $IID
+aws ec2 describe-instances --instance-ids $IID `
+  --query 'Reservations[].Instances[].PublicIpAddress' --output text</code></pre>
+    </figure>
+    <div class="note warn">
+      <span class="label">The public IP changes on every start</span>
+      <p>Your old <code>~/.ssh/config</code> entry and any bookmarked URL now point at an address AWS has handed to someone else. Update the <code>HostName</code> line from section 4 before reconnecting — an SSH timeout after a restart is almost always this, not a broken instance or firewall.</p>
+    </div>
+    <p><code>wait instance-running</code> also returns before sshd is ready. A refused connection in the first ~30 seconds is normal; the OS is still booting. Retry before you start debugging.</p>
+
+    <h3>Never forget again</h3>
+    <p>The reliable fix is not discipline, it's a timer. Set it on the box itself and it shuts down at 22:00 whether or not you remembered:</p>
+    <figure class="term term--remote">
+      <figcaption><span class="dot"></span>bash<span class="where">on the instance</span></figcaption>
+<pre><code>echo "0 22 * * * root /sbin/shutdown -h now" | sudo tee /etc/cron.d/nightly-stop</code></pre>
+    </figure>
+
+    <h3>Sweep for forgotten instances</h3>
+    <p>The expensive mistake is not a box you left running — it's one you left running <strong>in a region you forgot you used</strong>. The console shows one region at a time, so an instance launched in <code>ap-south-1</code> during a tutorial is invisible from <code>us-east-1</code> forever.</p>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>PowerShell<span class="where">your laptop</span></figcaption>
+<pre><code>foreach ($r in (aws ec2 describe-regions --query 'Regions[].RegionName' --output text).Split()) {
+  $out = aws ec2 describe-instances --region $r `
+    --filters "Name=instance-state-name,Values=running" `
+    --query 'Reservations[].Instances[].InstanceId' --output text
+  if ($out) { Write-Output "$r : $out" }
+}</code></pre>
+    </figure>
+    <p>Silence means nothing is running anywhere. Run it whenever a bill surprises you, and once at the end of term.</p>
+  </section>
+
+  <section id="cheat">
+    <h2><span class="n">§</span><span>Command cheat sheet</span></h2>
+    <div class="rule"></div>
+    <figure class="term term--local">
+      <figcaption><span class="dot"></span>PowerShell<span class="where">your laptop</span></figcaption>
+<pre><code><span class="c"># --- lifecycle ---</span>
+aws ec2 start-instances     --instance-ids $IID
+aws ec2 stop-instances      --instance-ids $IID
+aws ec2 terminate-instances --instance-ids $IID   <span class="w"># PERMANENT, deletes the disk</span>
+
+<span class="c"># wait until genuinely ready (not merely "running")</span>
+aws ec2 wait instance-status-ok --instance-ids $IID
+
+<span class="c"># current public IP</span>
+aws ec2 describe-instances --instance-ids $IID `
+  --query "Reservations[0].Instances[0].PublicIpAddress" --output text
+
+<span class="c"># everything you own, at a glance</span>
+aws ec2 describe-instances `
+  --query 'Reservations[].Instances[].{ID:InstanceId,Type:InstanceType,State:State.Name,IP:PublicIpAddress}' `
+  --output table
+
+<span class="c"># what else is still billing?</span>
+aws ec2 describe-volumes   --query 'Volumes[].{ID:VolumeId,GiB:Size,State:State}' --output table
+aws ec2 describe-addresses --query 'Addresses[].{IP:PublicIp,Assoc:InstanceId}'   --output table
+aws ec2 describe-snapshots --owner-ids $ACCT --query 'Snapshots[].{ID:SnapshotId,GiB:VolumeSize}' --output table
+
+<span class="c"># re-allow SSH after your home IP changes</span>
+$myip = (Invoke-RestMethod https://checkip.amazonaws.com).Trim()
+aws ec2 authorize-security-group-ingress --group-id $SG `
+  --protocol tcp --port 22 --cidr "$myip/32"</code></pre>
+    </figure>
+    <figure class="term term--remote">
+      <figcaption><span class="dot"></span>bash<span class="where">on the instance</span></figcaption>
+<pre><code>free -h                                     <span class="c"># memory + swap</span>
+df -h /                                     <span class="c"># disk</span>
+lsblk                                       <span class="c"># block devices (before growpart!)</span>
+systemctl is-active &lt;svc&gt;                    <span class="c"># is it up?</span>
+sudo journalctl -u &lt;svc&gt; -n 50 --no-pager    <span class="c"># why did it die?</span>
+ss -tlnp                                    <span class="c"># what's listening</span></code></pre>
+    </figure>
+  </section>
+
+  <section id="lessons">
+    <h2><span class="n">§</span><span>Hard-won lessons</span></h2>
+    <div class="rule"></div>
+    <ol class="lessons">
+      <li><span><strong><code>icacls</code> needs the full <code>machine\user</code></strong> — Git Bash's <code>whoami</code> and PowerShell's <code>$env:USERNAME</code> both give you only half of it.</span></li>
+      <li><span><strong><code>export MSYS_NO_PATHCONV=1</code></strong> before any Git Bash command with a <code>/leading/path</code> argument, or it silently becomes <code>C:/Program Files/Git/...</code>.</span></li>
+      <li><span><strong><code>remote.SSH.remotePlatform</code> must be set</strong>, or VS Code tries <code>powershell</code> on Linux.</span></li>
+      <li><span><strong><code>Address already in use</code> = success</strong>, not failure.</span></li>
+      <li><span><strong>Never check a socket in the same breath as starting it.</strong></span></li>
+      <li><span><strong>Know which machine your prompt is on</strong> before pasting commands.</span></li>
+      <li><span><strong>Add swap on any 1 GB instance</strong> before pip installing anything.</span></li>
+      <li><span><strong>Run <code>lsblk</code> before <code>growpart</code></strong> — device names differ between Nitro and Xen.</span></li>
+      <li><span><strong>Never hardcode an AMI id.</strong> Resolve it from an SSM parameter; they change constantly.</span></li>
+      <li><span><strong>The public IP changes on stop/start</strong> (a plain <code>reboot</code> keeps it). If SSH times out, check the IP before anything else.</span></li>
+      <li><span><strong><code>terminate</code> deletes your disk.</strong> <code>stop</code> keeps it. Learn this on a box you don't care about.</span></li>
+      <li><span><strong>CloudTrail tells you who did what</strong> — <code>root</code> means the console, your IAM username means a script.</span></li>
+      <li><span><strong>Set the budget alarm on day one</strong>, not after the first surprise bill.</span></li>
+      <li><span><strong>Provision 20 GB, not 8.</strong> The default is smaller than a working dev box needs.</span></li>
+    </ol>
+  </section>
+
+  </main>
+</div>
+</div>
+
+<footer>
+  <div class="wrap">Built from a real session, 2026-08-31 · us-east-1 · Ubuntu 24.04 on t3.micro</div>
+</footer>
+
+</body>
+</html>
