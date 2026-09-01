@@ -668,7 +668,7 @@ the console, your IAM username means it came from a script or the CLI. That's ho
 you establish whether a resource died from a console click or a command:
 
 ```
-23:33:27  StopInstances       prameela_m   <- CLI
+23:33:27  StopInstances       dev-user     <- CLI
 23:33:46  TerminateInstances  root         <- console
 ```
 
