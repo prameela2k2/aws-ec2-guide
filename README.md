@@ -678,6 +678,117 @@ MFA enabled. Root has no permission boundaries and cannot be restricted.
 
 ---
 
+## 12. The stop routine — how to actually stop paying
+
+§11 explains what `stop` *means*. This is the habit that turns it into money saved.
+Compute billing is per-second, so an instance you stop after class costs a few cents
+a day instead of $7.60 a month.
+
+### End of every session
+
+```powershell
+aws ec2 stop-instances --instance-ids $IID
+aws ec2 wait instance-stopped --instance-ids $IID   # blocks until it's genuinely stopped
+aws ec2 describe-instances --instance-ids $IID `
+  --query 'Reservations[].Instances[].State.Name' --output text
+```
+
+**Wait for `stopped`, not `stopping`.** `stop-instances` returns immediately with
+`"CurrentState": "stopping"` — that's the API acknowledging your request, not the
+machine being off. Shutdown takes 30-60 seconds and **you are billed for all of it.**
+Fire-and-forget the command and you never learn that a stuck shutdown left the thing
+running all weekend. `wait instance-stopped` is what makes it a fact.
+
+You can also stop it from inside the box — for an EBS-backed instance the default
+shutdown behaviour is `stop`, so this bills identically:
+
+```bash
+sudo shutdown -h now
+```
+
+### What still costs money while stopped
+
+| | Stopped | Note |
+|---|---|---|
+| Compute | **$0** | this is the whole point |
+| EBS root disk | **$0.64-$1.60/mo** | bills 24/7, stopped or not |
+| Auto-assigned public IP | $0 | released on stop — you get a new one on start |
+| **Elastic IP** | **$0.005/hr (~$3.65/mo)** | **keeps billing while the instance is stopped** |
+
+The Elastic IP row is the one that catches people. Since February 2024 AWS charges for
+*every* public IPv4 address, including an EIP sitting idle. If you allocated one to
+keep a stable address, a stopped instance still costs you ~$3.65/month for it — more
+than the disk. Release it unless you genuinely need the address to survive restarts:
+
+```powershell
+aws ec2 describe-addresses --query 'Addresses[].{IP:PublicIp,Alloc:AllocationId,Inst:InstanceId}' --output table
+aws ec2 release-address --allocation-id eipalloc-0123456789abcdef0
+```
+
+So a stopped dev box costs **about $1.60/month** — all of it disk. If that still
+bothers you, terminate instead and relaunch from scratch next time; §11 covers what
+you lose.
+
+### Starting it back up
+
+```powershell
+aws ec2 start-instances --instance-ids $IID
+aws ec2 wait instance-running --instance-ids $IID
+aws ec2 describe-instances --instance-ids $IID `
+  --query 'Reservations[].Instances[].PublicIpAddress' --output text
+```
+
+**The public IP changes on every start.** Your old `~/.ssh/config` entry and any
+bookmarked URL now point at an address AWS has handed to a stranger. Update the
+`HostName` line from §4 before you reconnect — an SSH timeout after a restart is
+almost always this, not a broken instance or firewall.
+
+`wait instance-running` also returns before sshd is ready. If the connection is
+refused for the first ~30 seconds after `running`, that's normal — the OS is still
+booting. Retry before you start debugging.
+
+### Never forget again
+
+The reliable fix is not discipline, it's a timer. Simplest version, set on the box
+itself — it shuts down at 22:00 every night whether or not you remembered:
+
+```bash
+echo "0 22 * * * root /sbin/shutdown -h now" | sudo tee /etc/cron.d/nightly-stop
+```
+
+For a class where students each run their own box, schedule it AWS-side instead so it
+works even on an instance nobody can log into. EventBridge Scheduler can call
+`ec2:StopInstances` on a cron, though it needs an IAM role with that permission —
+worth the twenty minutes once, since it protects every instance in the account.
+
+### Sweep for forgotten instances
+
+The expensive mistake is not a box you left running — it's one you left running **in a
+region you forgot you used**. The console only shows one region at a time, so an
+instance launched in `ap-south-1` during a tutorial is invisible from `us-east-1`
+forever. Check all of them:
+
+```powershell
+foreach ($r in (aws ec2 describe-regions --query 'Regions[].RegionName' --output text).Split()) {
+  $out = aws ec2 describe-instances --region $r `
+    --filters "Name=instance-state-name,Values=running" `
+    --query 'Reservations[].Instances[].InstanceId' --output text
+  if ($out) { Write-Output "$r : $out" }
+}
+```
+
+Silence means nothing is running anywhere. Run it whenever a bill surprises you, and
+once at the end of term.
+
+### End-of-session checklist
+
+1. `aws ec2 stop-instances` — then `wait instance-stopped` to confirm
+2. `aws ec2 describe-addresses` — release any Elastic IP you don't need
+3. Done for the term? `terminate` instead, and check volumes are gone:
+   `aws ec2 describe-volumes --query 'Volumes[].VolumeId' --output text`
+
+---
+
 ## Command cheat sheet
 
 ```powershell
